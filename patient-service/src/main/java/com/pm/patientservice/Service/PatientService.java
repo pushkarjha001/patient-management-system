@@ -6,6 +6,8 @@ import com.pm.patientservice.dto.PatientRequestDTO;
 import com.pm.patientservice.dto.PatientResponseDTO;
 import com.pm.patientservice.exception.EmailAlreadyExistsException;
 import com.pm.patientservice.exception.PatientNotFoundException;
+import com.pm.patientservice.grpc.BillingServiceGrpcClient;
+import com.pm.patientservice.kafka.KafkaProducer;
 import com.pm.patientservice.mapper.PatientMapper;
 import com.pm.patientservice.model.Patient;
 import org.springframework.stereotype.Service;
@@ -17,9 +19,15 @@ import java.util.UUID;
 @Service
 public class PatientService {
     private PatientRepository patientRepository;
+    private BillingServiceGrpcClient billingServiceGrpcClient;
+    private KafkaProducer kafkaProducer;
 
-    public PatientService(PatientRepository patientRepository) {
+    public PatientService(PatientRepository patientRepository,
+                          BillingServiceGrpcClient billingServiceGrpcClient,
+                          KafkaProducer kafkaProducer) {
+        this.billingServiceGrpcClient = billingServiceGrpcClient;
         this.patientRepository = patientRepository;
+        this.kafkaProducer=kafkaProducer;
     }
 
     public List<PatientResponseDTO> getPatients() {
@@ -33,10 +41,17 @@ public class PatientService {
     public PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO) {
         if (patientRepository.existsByEmail(patientRequestDTO.getEmail())) {
             throw new EmailAlreadyExistsException("A patient with this Email already exist " + patientRequestDTO.getEmail());
-
         }
+
         Patient newPatient = patientRepository.save(PatientMapper.toModel(patientRequestDTO));
         newPatient.setName(patientRequestDTO.getName());
+
+        billingServiceGrpcClient.createBillingAccount(newPatient.getId().toString(),newPatient.getName(), newPatient.getEmail());
+
+       kafkaProducer.sendEvent(newPatient);
+
+
+
         return PatientMapper.toDTO(newPatient);
 
     }
