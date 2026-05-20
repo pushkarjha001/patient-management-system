@@ -14,6 +14,9 @@ public class KafkaConsumer {
 
     @KafkaListener(topics="patient", groupId = "analytics-service")
     public void consumeEvent(byte[] event) {
+
+        log.info("Kafka listener triggered");
+
         try {
             PatientEvent patientEvent = PatientEvent.parseFrom(event);
             // ... perform any business related to analytics here
